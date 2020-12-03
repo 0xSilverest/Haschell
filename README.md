@@ -9,3 +9,5 @@ Improve error detection for numbers.
 Add types :
     complex numbers
     
+Add every other thing functions, operators ...
+    
