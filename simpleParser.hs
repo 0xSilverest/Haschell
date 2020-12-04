@@ -1,6 +1,8 @@
 import Text.ParserCombinators.Parsec hiding (spaces)
 import System.Environment
 import Numeric
+import Data.Ratio
+import Data.Complex
 
 data LispVal = Atom String
              | List [LispVal]
@@ -10,6 +12,8 @@ data LispVal = Atom String
              | Bool Bool
              | Character Char
              | Float Float
+             | Rational Rational 
+             | Complex (Complex Float)
              deriving Show 
 
 symbol :: Parser Char
@@ -64,7 +68,8 @@ parseNum = do x <- parseDig <|> parseDec
               return $ x
 
 parseDig :: Parser LispVal
-parseDig = do x <- many1 digit
+parseDig = do try $ string ""
+              x <- many1 digit
               return $ (Number . read) x
 
 parseDec :: Parser LispVal
@@ -106,14 +111,54 @@ parseFloat = do x <- many1 digit
                 y <- many1 digit
                 return $ (Float . read) (x ++ "." ++ y)
 
+parseRatio :: Parser LispVal
+parseRatio = do x <- many1 digit
+                char '/'
+                y <- many1 digit
+                return $ Rational ((read x) % (read y))
+
+toDouble :: LispVal -> Float
+toDouble(Float f) = realToFrac f
+toDouble(Number n) = fromIntegral n
+
+parseComplex :: Parser LispVal
+parseComplex = do try $ string ""
+                  x <- (try parseFloat <|> try parseNum)
+                  char '+'
+                  y <- (try parseFloat <|> try parseNum)
+                  char 'i'
+                  return $ Complex (toDouble x :+ toDouble y)
+
+parseList :: Parser LispVal
+parseList = sepBy parseExpr spaces >>= return . List
+
+parseDottedList :: Parser LispVal
+parseDottedList = do head <- endBy parseExpr spaces
+                     tail <- char '.' >> spaces >> parseExpr 
+                     return $ DottedList head tail           
+
+parseQuoted :: Parser LispVal
+parseQuoted = do char '\''
+                 x <- parseExpr
+                 return $ List [Atom "quote", x]
+
+parseListTypes :: Parser LispVal
+parseListTypes = do char '('
+                    x <- try parseList <|> parseDottedList
+                    char ')'
+                    return x
 
 parseExpr :: Parser LispVal
 parseExpr = parseAtom 
          <|> parseString 
+         <|> try parseComplex
+         <|> try parseRatio
          <|> try parseFloat
          <|> try parseNum
          <|> try parseBool
          <|> try parseChar
+         <|> parseQuoted
+         <|> parseListTypes
 
 readExpr :: String -> String
 readExpr input = case parse parseExpr "lisp" input of 
@@ -124,3 +169,7 @@ main :: IO ()
 main = do
         (expr : _) <- getArgs
         putStrLn $ readExpr expr
+
+
+
+
