@@ -1,1 +1,2 @@
-./dist-newstyle/*
+# Ignore the output directory
+dist-newstyle/
