@@ -121,10 +121,11 @@ parseComplex = do try $ string ""
                   char 'i'
                   return $ Complex (toDouble x :+ toDouble y)
                       where 
-                          numberParser = try parseFloat <|> try parseNum
+                          numberParser = try parseFloat <|> parseNum
 
 parseList :: Parser LispVal
-parseList = sepBy parseExpr spaces >>= return . List
+parseList = sepBy parseExpr spaces 
+            >>= return . List
 
 parseDottedList :: Parser LispVal
 parseDottedList = do head <- endBy parseExpr spaces
@@ -168,9 +169,9 @@ parseExpr = parseAtom
          <|> parseQuoteTypes
          <|> parseListTypes
 
-readExpr :: String -> String
+readExpr :: String -> LispVal
 readExpr input = case parse parseExpr "lisp" input of 
-                   Left err  -> "No match: " ++ show err
-                   Right val -> "Found value: " ++ show val
+                   Left err  -> String $ "No match: " ++ show err
+                   Right val -> val
 
 

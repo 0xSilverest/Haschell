@@ -12,8 +12,7 @@ data LispVal = Atom String
              | Float Float
              | Rational Rational 
              | Complex (Complex Float)
-             deriving Show 
-
+             
 showVal :: LispVal -> String
 showVal (String contents) = "\"" ++ contents ++ "\""
 showVal (Atom name) = name
@@ -26,4 +25,5 @@ showVal (DottedList head tail) = "(" ++ unwordsList head ++ " . " ++ showVal tai
 unwordsList :: [LispVal] -> String
 unwordsList = unwords . map showVal
 
-
+instance Show LispVal where 
+    show = showVal
