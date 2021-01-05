@@ -133,7 +133,7 @@
 #endif /* MIN_TOOL_VERSION_strip */
 
 #ifndef CURRENT_COMPONENT_ID
-#define CURRENT_COMPONENT_ID "SchemeInterpreter-0.1.0.0-inplace-SchemeInterpreter"
+#define CURRENT_COMPONENT_ID "SchemeInterpreter-0.1.0.0-inplace-SchemeInterpreter-exe"
 #endif /* CURRENT_COMPONENT_ID */
 #ifndef CURRENT_PACKAGE_VERSION
 #define CURRENT_PACKAGE_VERSION "0.1.0.0"

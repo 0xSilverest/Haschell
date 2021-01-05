@@ -1,3 +1,5 @@
+module SimpleParser where
+
 import LispVal
 import Text.ParserCombinators.Parsec hiding (spaces)
 import Numeric
@@ -165,4 +167,10 @@ parseExpr = parseAtom
          <|> try parseChar
          <|> parseQuoteTypes
          <|> parseListTypes
+
+readExpr :: String -> String
+readExpr input = case parse parseExpr "lisp" input of 
+                   Left err  -> "No match: " ++ show err
+                   Right val -> "Found value: " ++ show val
+
 

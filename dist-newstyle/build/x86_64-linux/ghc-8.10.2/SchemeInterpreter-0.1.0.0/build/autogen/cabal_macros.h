@@ -11,17 +11,6 @@
   (major1) == 0 && (major2) == 1 && (minor) <= 0)
 #endif /* MIN_VERSION_SchemeInterpreter */
 
-/* package SchemeInterpreter-0.1.0.0 */
-#ifndef VERSION_SchemeInterpreter
-#define VERSION_SchemeInterpreter "0.1.0.0"
-#endif /* VERSION_SchemeInterpreter */
-#ifndef MIN_VERSION_SchemeInterpreter
-#define MIN_VERSION_SchemeInterpreter(major1,major2,minor) (\
-  (major1) <  0 || \
-  (major1) == 0 && (major2) <  1 || \
-  (major1) == 0 && (major2) == 1 && (minor) <= 0)
-#endif /* MIN_VERSION_SchemeInterpreter */
-
 /* package base-4.14.1.0 */
 #ifndef VERSION_base
 #define VERSION_base "4.14.1.0"
@@ -32,6 +21,17 @@
   (major1) == 4 && (major2) <  14 || \
   (major1) == 4 && (major2) == 14 && (minor) <= 1)
 #endif /* MIN_VERSION_base */
+
+/* package parsec-3.1.14.0 */
+#ifndef VERSION_parsec
+#define VERSION_parsec "3.1.14.0"
+#endif /* VERSION_parsec */
+#ifndef MIN_VERSION_parsec
+#define MIN_VERSION_parsec(major1,major2,minor) (\
+  (major1) <  3 || \
+  (major1) == 3 && (major2) <  1 || \
+  (major1) == 3 && (major2) == 1 && (minor) <= 14)
+#endif /* MIN_VERSION_parsec */
 
 /* tool gcc-10.2.0 */
 #ifndef TOOL_VERSION_gcc
@@ -132,8 +132,11 @@
   (major1) == 2 && (major2) == 35 && (minor) <= 0)
 #endif /* MIN_TOOL_VERSION_strip */
 
+#ifndef CURRENT_PACKAGE_KEY
+#define CURRENT_PACKAGE_KEY "SchemeInterpreter-0.1.0.0-inplace"
+#endif /* CURRENT_PACKAGE_KEY */
 #ifndef CURRENT_COMPONENT_ID
-#define CURRENT_COMPONENT_ID "SchemeInterpreter-0.1.0.0-inplace-SchemeInterpreter"
+#define CURRENT_COMPONENT_ID "SchemeInterpreter-0.1.0.0-inplace"
 #endif /* CURRENT_COMPONENT_ID */
 #ifndef CURRENT_PACKAGE_VERSION
 #define CURRENT_PACKAGE_VERSION "0.1.0.0"

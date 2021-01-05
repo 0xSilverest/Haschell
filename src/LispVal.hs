@@ -1,3 +1,5 @@
+module LispVal where
+
 import Data.Complex
 
 data LispVal = Atom String
