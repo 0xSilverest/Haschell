@@ -2,5 +2,5 @@
 A simple scheme interpreter using haskell.
 
 # TODO
-Implement Error Handlers
+Implement full conidtionals
     

@@ -20,10 +20,12 @@ extra-source-files:  CHANGELOG.md, README.md
 library
   hs-source-dirs:      src
   exposed-modules:     LispVal
+                     , LispError
                      , SimpleParser
                      , Evaluator
   build-depends:       base >= 4.14 && < 4.15
                      , parsec
+                     , mtl
   default-language:    Haskell2010
 
 executable SchemeInterpreter-exe

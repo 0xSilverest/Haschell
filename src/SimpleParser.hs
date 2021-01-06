@@ -1,7 +1,9 @@
 module SimpleParser where
 
 import LispVal
+import LispError
 import Text.ParserCombinators.Parsec hiding (spaces)
+import Control.Monad.Except (throwError)
 import Numeric
 import Data.Functor ((<$>))
 import Data.Ratio
@@ -124,8 +126,8 @@ parseComplex = do try $ string ""
                           numberParser = try parseFloat <|> parseNum
 
 parseList :: Parser LispVal
-parseList = sepBy parseExpr spaces 
-            >>= return . List
+parseList = List <$> sepBy parseExpr spaces 
+       
 
 parseDottedList :: Parser LispVal
 parseDottedList = do head <- endBy parseExpr spaces
@@ -169,9 +171,9 @@ parseExpr = parseAtom
          <|> parseQuoteTypes
          <|> parseListTypes
 
-readExpr :: String -> LispVal
+readExpr :: String -> ThrowsError LispVal
 readExpr input = case parse parseExpr "lisp" input of 
-                   Left err  -> String $ "No match: " ++ show err
-                   Right val -> val
+                   Left err  -> throwError $ Parser err
+                   Right val -> return val
 
 

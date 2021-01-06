@@ -1,18 +1,31 @@
 module Evaluator where
 
 import LispVal
+import LispError
+import Control.Monad.Except (throwError)
+import Data.Functor
 
-eval :: LispVal -> LispVal
-eval val@(String _) = val
-eval val@(Number _) = val
-eval val@(Bool _) = val
-eval (List [Atom "quote", val]) = val
-eval (List (Atom func : args)) = apply func $ map eval args
+eval :: LispVal -> ThrowsError LispVal
+eval val@(String _) = return val
+eval val@(Number _) = return val
+eval val@(Bool _) = return val
+eval (List [Atom "if", pred, conseq, alt]) =  eval pred >>= ifEval
+                     where 
+                         ifEval pred = 
+                             case pred of
+                               Bool False -> eval alt
+                               _  -> eval conseq
 
-apply :: String -> [LispVal] -> LispVal
-apply func args = maybe (Bool False) ($ args) $ lookup func primitives
+eval (List [Atom "quote", val]) = return val
+eval (List (Atom func : args)) = mapM eval args >>= apply func
+eval errForm = throwError $ BadSpecialForm  "Unrecognized special form" errForm
 
-primitives :: [(String, [LispVal] -> LispVal)]
+apply :: String -> [LispVal] -> ThrowsError LispVal
+apply func args = maybe (throwError $ NotFunction "Unrecognized primitive function args" func)
+                        ($ args)
+                        (lookup func primitives)
+
+primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 primitives = [("+", numericBinop (+)),
               ("-", numericBinop (-)),
               ("*", numericBinop (*)),
@@ -27,17 +40,52 @@ primitives = [("+", numericBinop (+)),
               ("bool?", unaryOp isBool),
               ("list?", unaryOp isList),
               ("symbol->string", unaryOp sym2str),
-              ("string->symbol", unaryOp str2sym)]
+              ("string->symbol", unaryOp str2sym),
+              ("=", numBoolBinop(==)),
+              ("<", numBoolBinop(<)),
+              (">", numBoolBinop(>)),
+              ("/=", numBoolBinop(/=)),
+              (">=", numBoolBinop(>=)),
+              ("<=", numBoolBinop(<=)),
+              ("&&", boolBoolBinop(>=)),
+              ("||", boolBoolBinop(<=)),
+              ("string=?", strBoolBinop(==)),
+              ("string<?", strBoolBinop(<)),
+              ("string>?", strBoolBinop(<)),
+              ("string<=?", strBoolBinop(<=)),
+              ("string>=?", strBoolBinop(>=))]
 
-numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
-numericBinop op args = Number $ foldl1 op $ map unpack args
+numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> ThrowsError LispVal
+numericBinop op args = Number . foldl1 op <$> mapM unpackNum args 
 
-unaryOp :: (LispVal -> LispVal) -> [LispVal] -> LispVal
-unaryOp p [arg] = p arg 
+unaryOp :: (LispVal -> LispVal) -> [LispVal] -> ThrowsError LispVal
+unaryOp p [arg] = return $ p arg 
 
-unpack :: LispVal -> Integer 
-unpack (Number n) = n
-unpack _ = 0
+boolBinop :: (LispVal -> ThrowsError a) -> (a -> a -> Bool) -> [LispVal] -> ThrowsError LispVal
+boolBinop unpacker op args = if length args /= 2 then
+                                throwError $ NumArgs 2 args
+                             else
+                                do left <- unpacker $ head args
+                                   right <- unpacker $ head args
+                                   return $ Bool $ left `op` right
+
+numBoolBinop = boolBinop unpackNum
+boolBoolBinop = boolBinop unpackBool
+strBoolBinop = boolBinop unpackStr
+
+unpackNum :: LispVal -> ThrowsError Integer 
+unpackNum (Number n) = return n
+unpackNum _ = return 0
+
+unpackBool :: LispVal -> ThrowsError Bool
+unpackBool (Bool b) = return b
+unpackBool notBool = throwError $ TypeMismatch "boolean" notBool
+
+unpackStr :: LispVal -> ThrowsError String
+unpackStr (String str) = return str
+unpackStr (Number n) = return $ show n
+unpackStr (Bool b) = return $ show b
+unpackStr notString = throwError $ TypeMismatch "string" notString
 
 -- Type Checkers
 isSym, isNum, isStr, isBool, isList :: LispVal -> LispVal
@@ -62,3 +110,6 @@ str2sym _ = Atom ""
 notp :: LispVal -> LispVal
 notp (Bool False) = Bool True
 notp _ = Bool False
+
+
+
