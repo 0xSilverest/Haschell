@@ -1,20 +1,50 @@
+{-# LANGUAGE ExistentialQuantification #-}
+
 module Evaluator where
 
 import LispVal
 import LispError
-import Control.Monad.Except (throwError)
+import Control.Monad.Except (throwError, catchError)
 import Data.Functor
 
 eval :: LispVal -> ThrowsError LispVal
 eval val@(String _) = return val
 eval val@(Number _) = return val
 eval val@(Bool _) = return val
+eval val@(Character _) = return val
 eval (List [Atom "if", pred, conseq, alt]) =  eval pred >>= ifEval
                      where 
                          ifEval pred = 
                              case pred of
                                Bool False -> eval alt
-                               _  -> eval conseq
+                               Bool True  -> eval conseq
+                               _ -> throwError $ TypeMismatch "bool" pred
+
+eval (List ((Atom "cond"):cs)) = 
+    do 
+        b <- mapM condClause cs >>=  cdr . take 1 . dropWhile f
+        car [b] >>= eval
+            where condClause (List [p,b]) = do q <- eval p
+                                               case q of
+                                                 Bool _ -> return $ List [q, b]
+                                                 _      -> throwError $ TypeMismatch "bool" q
+                  condClause v = throwError $ TypeMismatch "(pred body)" v
+                  f = \(List [p, b]) -> case p of 
+                                            (Bool False) -> True
+                                            _ -> False
+
+eval pred@(List ((Atom "case") : k : c : cs)) = 
+    if null (c : cs) then
+        throwError $ BadSpecialForm "no true clause in case expression: " pred
+    else case c of 
+            List (Atom "else" : exprs) -> condChecker exprs
+            List ((List conds) : exprs) ->
+                do res <- eval k
+                   eq <- mapM (\x -> eqv [res, x]) conds
+                   if Bool True `elem` eq then
+                        condChecker exprs
+                   else eval $ List (Atom "case" : k : cs)
+    where condChecker expr = last <$> mapM eval expr
 
 eval (List [Atom "quote", val]) = return val
 eval (List (Atom func : args)) = mapM eval args >>= apply func
@@ -53,7 +83,16 @@ primitives = [("+", numericBinop (+)),
               ("string<?", strBoolBinop(<)),
               ("string>?", strBoolBinop(<)),
               ("string<=?", strBoolBinop(<=)),
-              ("string>=?", strBoolBinop(>=))]
+              ("string>=?", strBoolBinop(>=)),
+              ("car", car),
+              ("cdr", cdr),
+              ("cons", cons),
+              ("eq?", eqv),
+              ("eqv?", eqv),
+              ("equal?", equal),
+              ("string-length", strLen),
+              ("string-ref", strRef),
+              ("make-string", mkStr)]
 
 numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> ThrowsError LispVal
 numericBinop op args = Number . foldl1 op <$> mapM unpackNum args 
@@ -111,5 +150,83 @@ notp :: LispVal -> LispVal
 notp (Bool False) = Bool True
 notp _ = Bool False
 
+-- car is basically head
+car :: [LispVal] -> ThrowsError LispVal
+car [List (x : xs)] = return x
+car [DottedList (x : xs) _] = return x
+car [badArg] = throwError $ TypeMismatch "pair" badArg
+car badArg = throwError $ NumArgs 1 badArg
+
+-- cdr is tail
+cdr :: [LispVal] -> ThrowsError LispVal
+cdr [List (x : xs)] = return $ List xs
+cdr [DottedList [_] x] = return x
+cdr [DottedList (_ : xs) x] = return $ DottedList xs x
+cdr [badArg] = throwError $ TypeMismatch "pair" badArg
+cdr badArg = throwError $ NumArgs  1 badArg
+
+cons :: [LispVal] -> ThrowsError LispVal
+cons [x, List xs] = return $ List (x : xs)
+cons [x, DottedList xs y] = return $ DottedList (x : xs) y
+cons [x, y] = return $ DottedList [x] y
+cons badArg = throwError $ NumArgs  2 badArg
+
+eqv :: [LispVal] -> ThrowsError LispVal
+eqv [Bool x, Bool y] = return $ Bool (x == y)
+eqv [Number x, Number y] = return $ Bool (x == y)
+eqv [String x, String y] = return $ Bool (x == y)
+eqv [Atom x, Atom y] = return $ Bool (x == y)
+eqv zippedBoi@[List _, List _] = eqvList eqv zippedBoi 
+eqv [DottedList xs x, DottedList ys y] = eqv [List (xs ++ [x]), List (ys ++ [y])]
+eqv [_, _] = return $ Bool False 
+eqv badArg = throwError $ NumArgs 2 badArg
+
+-- equal? implementation
+-- Uses Existential types
+-- to allow usage of multiple
+-- types in one List
+data Unpacker = forall a . Eq a => AnyUnpacker (LispVal -> ThrowsError a)
+
+unpackEq :: LispVal -> LispVal -> Unpacker -> ThrowsError Bool
+unpackEq x y (AnyUnpacker unpacker) = 
+        do unpackedx <- unpacker x
+           unpackedy <- unpacker y
+           return $ unpackedx == unpackedy
+    `catchError` const (return False)
+
+equal :: [LispVal] -> ThrowsError LispVal
+equal zippedBoi@[List _, List _] = eqvList equal zippedBoi 
+equal [DottedList xs x, DottedList ys y] = equal [List $ xs ++ [x], List $ ys ++ [y]]
+equal [x, y] = do
+            primitiveEqs <- or <$> mapM (unpackEq x y)
+                            [AnyUnpacker unpackNum, AnyUnpacker unpackStr, AnyUnpacker unpackBool]
+            eqvEquals <- eqv [x, y]
+            return $ Bool (primitiveEqs || let (Bool x) = eqvEquals in x)
+equal badArg = throwError $ NumArgs  2 badArg
+
+eqvList :: ([LispVal] -> ThrowsError LispVal) -> [LispVal] -> ThrowsError LispVal
+eqvList eqvFnc [List xs, List ys] = return $ Bool $ (length xs == length ys) && all checkPair (zip xs ys)
+    where checkPair (x, y) = case eqvFnc [x, y] of
+                               Left err -> False
+                               Right (Bool val) -> val
+
+strLen :: [LispVal] -> ThrowsError LispVal
+strLen [String s] = Right $ Number $ fromIntegral $ length s
+strLen [notStr] = throwError $ TypeMismatch "string" notStr
+strLen badArg = throwError $ NumArgs 1 badArg
+
+strRef :: [LispVal] -> ThrowsError LispVal
+strRef [String s, Number n] =
+        if length s < ind + 1 then
+            throwError $ Default "Out of bound error"
+        else Right $ String [s !! ind]
+            where ind = fromIntegral n
+strRef [String _, notNum] = throwError $ TypeMismatch "number" notNum
+strRef [notString, _] = throwError $ TypeMismatch "string" notString
+strRef badArg = throwError $ NumArgs 2 badArg
+
+mkStr :: [LispVal] -> ThrowsError LispVal
+mkStr [Number n, Character c] = return $ String $ replicate (fromIntegral n) c
+mkStr [Number n] = return $ String $ replicate (fromIntegral n) '\x0'
 
 

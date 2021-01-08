@@ -18,12 +18,13 @@ spaces = skipMany1 space
 escapedChars :: Parser String
 escapedChars = do char '\\'
                   x <- oneOf "\\\"ntr"
-                  case x of 
+                  case x of
                     '\\' -> return [x]
                     '"'  -> return [x]
                     'n' -> return "\n"
                     't' -> return "\t"
                     'r' -> return "\r"
+                    '\x0' -> return " "
 
 parseChar :: Parser LispVal
 parseChar = do try $ string "#\\"
@@ -131,7 +132,7 @@ parseList = List <$> sepBy parseExpr spaces
 
 parseDottedList :: Parser LispVal
 parseDottedList = do head <- endBy parseExpr spaces
-                     tail <- char '.' >> spaces >> parseExpr 
+                     tail <- char '.' >> spaces >> parseExpr
                      return $ DottedList head tail           
 
 parseQuoted :: Parser LispVal

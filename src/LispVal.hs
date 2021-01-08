@@ -12,10 +12,12 @@ data LispVal = Atom String
              | Float Float
              | Rational Rational 
              | Complex (Complex Float)
-             
+            deriving Eq 
+
 showVal :: LispVal -> String
 showVal (String contents) = "\"" ++ contents ++ "\""
 showVal (Atom name) = name
+showVal (Character c) = show c
 showVal (Number contents) = show contents
 showVal (Bool True) = "#t"
 showVal (Bool False) = "#f"
