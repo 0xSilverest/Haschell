@@ -2,7 +2,7 @@ module SimpleParser where
 
 import LispVal
 import LispError
-import Text.ParserCombinators.Parsec hiding (spaces)
+import Text.ParserCombinators.Parsec
 import Control.Monad.Except (throwError)
 import Numeric
 import Data.Functor ((<$>))
@@ -11,9 +11,6 @@ import Data.Complex
 
 symbol :: Parser Char
 symbol = oneOf "!$%&|*+-/:<=>?@^_~"
-
-spaces :: Parser ()
-spaces = skipMany1 space
 
 escapedChars :: Parser String
 escapedChars = do char '\\'
@@ -24,7 +21,7 @@ escapedChars = do char '\\'
                     'n' -> return "\n"
                     't' -> return "\t"
                     'r' -> return "\r"
-                    '\x0' -> return " "
+                    '\x0' -> return ""
 
 parseChar :: Parser LispVal
 parseChar = do try $ string "#\\"
@@ -131,7 +128,7 @@ parseList = List <$> sepBy parseExpr spaces
        
 
 parseDottedList :: Parser LispVal
-parseDottedList = do head <- endBy parseExpr spaces
+parseDottedList = do head <- endBy parseExpr spaces 
                      tail <- char '.' >> spaces >> parseExpr
                      return $ DottedList head tail           
 
@@ -155,13 +152,13 @@ parseQuoteTypes = parseQuoted <|> parseUnquote
                 <|> parseQuasiquote
 
 parseListTypes :: Parser LispVal
-parseListTypes = do char '('
+parseListTypes = do char '(' <* spaces
                     x <- try parseList <|> parseDottedList
-                    char ')'
+                    char ')' 
                     return x
 
 parseExpr :: Parser LispVal
-parseExpr = parseAtom 
+parseExpr = (parseAtom 
          <|> parseString 
          <|> try parseComplex
          <|> try parseRatio
@@ -170,8 +167,8 @@ parseExpr = parseAtom
          <|> try parseBool
          <|> try parseChar
          <|> parseQuoteTypes
-         <|> parseListTypes
-
+         <|> parseListTypes)
+         <* spaces
 readExpr :: String -> ThrowsError LispVal
 readExpr input = case parse parseExpr "lisp" input of 
                    Left err  -> throwError $ Parser err
