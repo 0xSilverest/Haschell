@@ -4,27 +4,31 @@ module Evaluator where
 
 import LispVal
 import LispError
+import VarEnv
 import Control.Monad.Except (throwError, catchError)
 import Data.Functor
 
-eval :: LispVal -> ThrowsError LispVal
-eval val@(String _) = return val
-eval val@(Number _) = return val
-eval val@(Bool _) = return val
-eval val@(Character _) = return val
-eval (List [Atom "if", pred, conseq, alt]) =  eval pred >>= ifEval
+eval :: Env -> LispVal -> IOThrowsError LispVal
+eval env val@(String _) = return val
+eval env val@(Number _) = return val
+eval env val@(Bool _) = return val
+eval env val@(Character _) = return val
+eval env (Atom id) = getVar env id
+eval env (List [Atom "define", Atom var, val]) = eval env val >>= defineVar env var
+eval env (List [Atom "set!", Atom var, val]) = eval env val >>= setVar env var
+eval env (List [Atom "if", pred, conseq, alt]) =  eval env pred >>= ifEval
                      where 
                          ifEval pred = 
                              case pred of
-                               Bool False -> eval alt
-                               Bool True  -> eval conseq
+                               Bool False -> eval env alt
+                               Bool True  -> eval env conseq
                                _ -> throwError $ TypeMismatch "bool" pred
 
-eval (List ((Atom "cond"):cs)) = 
+eval env (List ((Atom "cond"):cs)) = 
     do 
-        b <- mapM condClause cs >>=  cdr . take 1 . dropWhile f
-        car [b] >>= eval
-            where condClause (List [p,b]) = do q <- eval p
+        b <- mapM condClause cs >>= liftT . cdr . take 1 . dropWhile f
+        liftT (car [b]) >>= eval env
+            where condClause (List [p,b]) = do q <- eval env p
                                                case q of
                                                  Bool _ -> return $ List [q, b]
                                                  _      -> throwError $ TypeMismatch "bool" q
@@ -33,22 +37,22 @@ eval (List ((Atom "cond"):cs)) =
                                             (Bool False) -> True
                                             _ -> False
 
-eval pred@(List ((Atom "case") : k : c : cs)) = 
+eval env pred@(List ((Atom "case") : k : c : cs)) = 
     if null (c : cs) then
-        throwError $ BadSpecialForm "no true clause in case expression: " pred
+        throwError $ BadSpecialForm "no true clause in case expression " pred
     else case c of 
-            List (Atom "else" : exprs) -> condChecker exprs
+            List (Atom "else" : exprs) -> eval env (last exprs)
             List ((List conds) : exprs) ->
-                do res <- eval k
-                   eq <- mapM (\x -> eqv [res, x]) conds
+                do res <- eval env k
+                   eq <- liftT $ mapM (\x -> eqv [res, x]) conds
                    if Bool True `elem` eq then
-                        condChecker exprs
-                   else eval $ List (Atom "case" : k : cs)
-    where condChecker expr = last <$> mapM eval expr
+                         eval env (last exprs)
+                   else eval env $ List (Atom "case" : k : cs)
+            _ -> throwError $ BadSpecialForm "bad-formed case expression " pred 
 
-eval (List [Atom "quote", val]) = return val
-eval (List (Atom func : args)) = mapM eval args >>= apply func
-eval errForm = throwError $ BadSpecialForm  "Unrecognized special form" errForm
+eval env (List [Atom "quote", val]) = return val
+eval env (List (Atom func : args)) = mapM (eval env) args >>= liftT . apply func
+eval env errForm = throwError $ BadSpecialForm  "Unrecognized special form" errForm
 
 apply :: String -> [LispVal] -> ThrowsError LispVal
 apply func args = maybe (throwError $ NotFunction "Unrecognized primitive function args" func)

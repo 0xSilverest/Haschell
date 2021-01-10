@@ -10,5 +10,5 @@ Run interpreter :
 ```
 
 # TODO
-Fix having extra space before parenth at the end.
+define primitive functions 
 add more list and string functions.

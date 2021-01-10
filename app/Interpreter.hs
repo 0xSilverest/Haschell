@@ -2,6 +2,7 @@ import Evaluator
 import LispVal
 import SimpleParser
 import LispError
+import VarEnv
 import System.IO
 import System.Environment
 
@@ -11,11 +12,11 @@ flushStr str = putStr str >> hFlush stdout
 readPrompt :: String -> IO String
 readPrompt prompt = flushStr prompt >> getLine 
 
-evalString :: String -> IO String
-evalString expr = return $ extractValue $ trapError (fmap show $ readExpr expr >>= eval)
+evalString :: Env -> String -> IO String
+evalString env expr = runIOThrows $ fmap show $ liftT (readExpr expr) >>= eval env
 
-evalAndPrint :: String -> IO ()
-evalAndPrint expr = evalString expr >>= putStrLn
+evalAndPrint :: Env -> String -> IO ()
+evalAndPrint env expr = evalString env expr >>= putStrLn
 
 until_ :: Monad m => (a -> Bool) -> m a -> (a -> m ()) -> m ()
 until_ pred prompt action = do
@@ -24,11 +25,14 @@ until_ pred prompt action = do
     else action result >> until_ pred prompt action
 
 runRepl :: IO ()
-runRepl = until_ (`elem` [":quit", ":q"]) (readPrompt "Lisp> ") evalAndPrint
+runRepl = nullEnv >>= until_ (`elem` [":quit", ":q"]) (readPrompt "Lisp>> ") . evalAndPrint
+
+runOnce :: String -> IO ()
+runOnce expr = nullEnv >>= flip evalAndPrint expr
 
 main :: IO ()
 main = do args <- getArgs
           case length args of
             0 -> runRepl
-            1 -> evalAndPrint $ head args
+            1 -> runOnce $ head args
             _ -> putStrLn "Program takes only 0 or 1 args"
