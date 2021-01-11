@@ -5,10 +5,6 @@ import Control.Monad.Except (ExceptT, runExceptT, throwError, liftIO)
 import Data.Maybe (isJust)
 
 import LispVal
-import LispError
-
-type Env = IORef [(String, IORef LispVal)]
-type IOThrowsError = ExceptT LispError IO
 
 nullEnv :: IO Env
 nullEnv = newIORef []

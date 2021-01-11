@@ -10,5 +10,5 @@ Run interpreter :
 ```
 
 # TODO
-define primitive functions 
-add more list and string functions.
+Fix predicates going one way or another.
+Change case implementation.

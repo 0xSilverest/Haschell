@@ -3,10 +3,10 @@
 module Evaluator where
 
 import LispVal
-import LispError
 import VarEnv
-import Control.Monad.Except (throwError, catchError)
-import Data.Functor
+import Control.Monad.Except (throwError, catchError, liftIO)
+import Data.Functor ((<$>))
+import Data.Maybe (isNothing)
 
 eval :: Env -> LispVal -> IOThrowsError LispVal
 eval env val@(String _) = return val
@@ -15,11 +15,20 @@ eval env val@(Bool _) = return val
 eval env val@(Character _) = return val
 eval env (Atom id) = getVar env id
 eval env (List [Atom "define", Atom var, val]) = eval env val >>= defineVar env var
+eval env (List (Atom "define" : List (Atom var : params) : body)) =
+    makeNormalFunc env params body >>= defineVar env var
+eval env (List (Atom "define" : DottedList (Atom var : params) varargs : body)) = 
+    makeVarArgs varargs env params body >>= defineVar env var
+eval env (List (Atom "lambda" : List params : body)) = 
+    makeNormalFunc env params body
+eval env (List (Atom "lambda" : DottedList params varargs : body)) =
+    makeVarArgs varargs env params body
+eval env (List (Atom "lambda" : varargs@(Atom _) : body)) = 
+    makeVarArgs varargs env [] body
 eval env (List [Atom "set!", Atom var, val]) = eval env val >>= setVar env var
-eval env (List [Atom "if", pred, conseq, alt]) =  eval env pred >>= ifEval
-                     where 
-                         ifEval pred = 
-                             case pred of
+eval env (List [Atom "if", pred, conseq, alt]) = do 
+                         b <- eval env pred 
+                         case b of
                                Bool False -> eval env alt
                                Bool True  -> eval env conseq
                                _ -> throwError $ TypeMismatch "bool" pred
@@ -37,7 +46,8 @@ eval env (List ((Atom "cond"):cs)) =
                                             (Bool False) -> True
                                             _ -> False
 
-eval env pred@(List ((Atom "case") : k : c : cs)) = 
+{- Need to work on the case evaluation to not use elem so no need to derive Eq
+   eval env pred@(List ((Atom "case") : k : c : cs)) = 
     if null (c : cs) then
         throwError $ BadSpecialForm "no true clause in case expression " pred
     else case c of 
@@ -49,15 +59,27 @@ eval env pred@(List ((Atom "case") : k : c : cs)) =
                          eval env (last exprs)
                    else eval env $ List (Atom "case" : k : cs)
             _ -> throwError $ BadSpecialForm "bad-formed case expression " pred 
-
+-}
 eval env (List [Atom "quote", val]) = return val
-eval env (List (Atom func : args)) = mapM (eval env) args >>= liftT . apply func
+eval env (List (func : args)) = do
+            fn <- eval env func 
+            mapM (eval env) args >>= apply fn
+
 eval env errForm = throwError $ BadSpecialForm  "Unrecognized special form" errForm
 
-apply :: String -> [LispVal] -> ThrowsError LispVal
-apply func args = maybe (throwError $ NotFunction "Unrecognized primitive function args" func)
-                        ($ args)
-                        (lookup func primitives)
+apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
+apply (PrimitiveFunc func) args = liftT $ func args
+apply (Func params varargs body closure) args =
+    if num params /= num args && isNothing varargs then
+        throwError $ NumArgs (num params) args
+    else liftIO (bindVars closure $ zip params args) >>= bindVarArgs varargs >>= evalBody
+        where remArgs = drop (length params) args
+              num = toInteger . length
+              evalBody env = last <$> mapM (eval env) body
+              bindVarArgs arg env = 
+                  case arg of
+                    Just argName -> liftIO $ bindVars env [(argName, List remArgs)]
+                    Nothing -> return env
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
 primitives = [("+", numericBinop (+)),
@@ -75,19 +97,19 @@ primitives = [("+", numericBinop (+)),
               ("list?", unaryOp isList),
               ("symbol->string", unaryOp sym2str),
               ("string->symbol", unaryOp str2sym),
-              ("=", numBoolBinop(==)),
-              ("<", numBoolBinop(<)),
-              (">", numBoolBinop(>)),
-              ("/=", numBoolBinop(/=)),
-              (">=", numBoolBinop(>=)),
-              ("<=", numBoolBinop(<=)),
-              ("&&", boolBoolBinop(>=)),
-              ("||", boolBoolBinop(<=)),
-              ("string=?", strBoolBinop(==)),
-              ("string<?", strBoolBinop(<)),
-              ("string>?", strBoolBinop(<)),
-              ("string<=?", strBoolBinop(<=)),
-              ("string>=?", strBoolBinop(>=)),
+              ("=", numBoolBinop (==)),
+              ("<", numBoolBinop (<)),
+              (">", numBoolBinop (>)),
+              ("/=", numBoolBinop (/=)),
+              (">=", numBoolBinop (>=)),
+              ("<=", numBoolBinop (<=)),
+              ("&&", boolBoolBinop (>=)),
+              ("||", boolBoolBinop (<=)),
+              ("string=?", strBoolBinop (==)),
+              ("string<?", strBoolBinop (<)),
+              ("string>?", strBoolBinop (<)),
+              ("string<=?", strBoolBinop (<=)),
+              ("string>=?", strBoolBinop (>=)),
               ("car", car),
               ("cdr", cdr),
               ("cons", cons),
@@ -232,5 +254,9 @@ strRef badArg = throwError $ NumArgs 2 badArg
 mkStr :: [LispVal] -> ThrowsError LispVal
 mkStr [Number n, Character c] = return $ String $ replicate (fromIntegral n) c
 mkStr [Number n] = return $ String $ replicate (fromIntegral n) '\x0'
+
+makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
+makeNormalFunc = makeFunc Nothing
+makeVarArgs = makeFunc . Just . showVal
 
 

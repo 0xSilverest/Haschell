@@ -1,7 +1,6 @@
 module SimpleParser where
 
 import LispVal
-import LispError
 import Text.ParserCombinators.Parsec
 import Control.Monad.Except (throwError)
 import Numeric

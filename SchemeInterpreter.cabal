@@ -20,7 +20,6 @@ extra-source-files:  CHANGELOG.md, README.md
 library
   hs-source-dirs:      src
   exposed-modules:     LispVal
-                     , LispError
                      , SimpleParser
                      , Evaluator
                      , VarEnv

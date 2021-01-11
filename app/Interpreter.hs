@@ -1,7 +1,6 @@
 import Evaluator
 import LispVal
 import SimpleParser
-import LispError
 import VarEnv
 import System.IO
 import System.Environment
@@ -11,6 +10,10 @@ flushStr str = putStr str >> hFlush stdout
 
 readPrompt :: String -> IO String
 readPrompt prompt = flushStr prompt >> getLine 
+
+primitiveBind :: IO Env
+primitiveBind = nullEnv >>= flip bindVars (map makePrimitiveFunc primitives)
+    where makePrimitiveFunc (var, func) = (var, PrimitiveFunc func)
 
 evalString :: Env -> String -> IO String
 evalString env expr = runIOThrows $ fmap show $ liftT (readExpr expr) >>= eval env
@@ -25,10 +28,10 @@ until_ pred prompt action = do
     else action result >> until_ pred prompt action
 
 runRepl :: IO ()
-runRepl = nullEnv >>= until_ (`elem` [":quit", ":q"]) (readPrompt "Lisp>> ") . evalAndPrint
+runRepl = primitiveBind >>= until_ (`elem` [":quit", ":q"]) (readPrompt "Lisp>> ") . evalAndPrint
 
 runOnce :: String -> IO ()
-runOnce expr = nullEnv >>= flip evalAndPrint expr
+runOnce expr = primitiveBind >>= flip evalAndPrint expr
 
 main :: IO ()
 main = do args <- getArgs
