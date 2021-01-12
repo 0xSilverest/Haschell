@@ -10,5 +10,5 @@ Run interpreter :
 ```
 
 # TODO
-Fix predicates going one way or another.
+Add file IO
 Change case implementation.

@@ -107,7 +107,7 @@ primitives = [("+", numericBinop (+)),
               ("||", boolBoolBinop (<=)),
               ("string=?", strBoolBinop (==)),
               ("string<?", strBoolBinop (<)),
-              ("string>?", strBoolBinop (<)),
+              ("string>?", strBoolBinop (>)),
               ("string<=?", strBoolBinop (<=)),
               ("string>=?", strBoolBinop (>=)),
               ("car", car),
@@ -131,7 +131,7 @@ boolBinop unpacker op args = if length args /= 2 then
                                 throwError $ NumArgs 2 args
                              else
                                 do left <- unpacker $ head args
-                                   right <- unpacker $ head args
+                                   right <- unpacker $ (head . tail) args
                                    return $ Bool $ left `op` right
 
 numBoolBinop = boolBinop unpackNum
@@ -140,7 +140,7 @@ strBoolBinop = boolBinop unpackStr
 
 unpackNum :: LispVal -> ThrowsError Integer 
 unpackNum (Number n) = return n
-unpackNum _ = return 0
+unpackNum notNum = throwError $ TypeMismatch "number" notNum
 
 unpackBool :: LispVal -> ThrowsError Bool
 unpackBool (Bool b) = return b
