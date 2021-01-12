@@ -10,5 +10,5 @@ Run interpreter :
 ```
 
 # TODO
-Add file IO
+Add file IO.
 Change case implementation.
